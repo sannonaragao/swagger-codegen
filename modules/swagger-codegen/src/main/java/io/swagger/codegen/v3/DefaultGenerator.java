@@ -1,5 +1,6 @@
 package io.swagger.codegen.v3;
 
+import static java.util.Objects.isNull;
 import io.swagger.codegen.v3.ignore.CodegenIgnoreProcessor;
 import io.swagger.codegen.v3.templates.TemplateEngine;
 import io.swagger.codegen.v3.utils.ImplementationVersion;
@@ -50,7 +51,7 @@ import java.util.TreeSet;
 
 public class DefaultGenerator extends AbstractGenerator implements Generator {
     protected final Logger LOGGER = LoggerFactory.getLogger(DefaultGenerator.class);
-    protected CodegenConfig config;
+    private CodegenConfig config;
     protected ClientOptInput opts;
     protected OpenAPI openAPI;
     protected CodegenIgnoreProcessor ignoreProcessor;
@@ -75,6 +76,10 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
         this.openAPI = opts.getOpenAPI();
         this.config = opts.getConfig();
         this.config.additionalProperties().putAll(opts.getOpts().getProperties());
+////        LOGGER.info("this.config.outputFolder() {}  ",this.config.outputFolder() );
+////        LOGGER.info("this.config.getOutputDir() {}  ",this.config.getOutputDir() );
+////        LOGGER.info("this.config.modelFileFolder() {}  ",this.config.modelFileFolder() );
+////        LOGGER.info("opts.toString() {}  ", opts.toString() );
 
         String ignoreFileLocation = this.config.getIgnoreFilePathOverride();
         if(ignoreFileLocation != null) {
@@ -337,6 +342,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
         }
 
         String modelNames = System.getProperty("models");
+
         Set<String> modelsToGenerate = null;
         if(modelNames != null && !modelNames.isEmpty()) {
             modelsToGenerate = new HashSet<>(Arrays.asList(modelNames.split(",")));
@@ -430,7 +436,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                 allModels.add(modelTemplate);
                 for (String templateName : config.modelTemplateFiles().keySet()) {
                     String suffix = config.modelTemplateFiles().get(templateName);
-                    String filename = config.modelFileFolder() + File.separator + config.toModelFilename(modelName) + suffix;
+                    String filename = config.modelFileFolder() + File.separator + config.toModelFilename(modelName) + suffix; // <-
                     if (!config.shouldOverwrite(filename)) {
                         LOGGER.info("Skipped overwriting " + filename);
                         continue;
@@ -528,6 +534,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                     }
                 }
 
+
                 for (String templateName : config.apiTemplateFiles().keySet()) {
                     String filename = config.apiFilename(templateName, tag);
                     if (!config.shouldOverwrite(filename) && new File(filename).exists()) {
@@ -550,7 +557,6 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                             LOGGER.info("File exists. Skipped overwriting " + filename);
                             continue;
                         }
-
                         File written = processTemplateToFile(operation, templateName, filename);
                         if (written != null) {
                             files.add(written);
@@ -567,7 +573,6 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                             LOGGER.info("Skipped overwriting " + filename);
                             continue;
                         }
-
                         File written = processTemplateToFile(operation, templateName, filename);
                         if (written != null) {
                             files.add(written);
@@ -614,6 +619,8 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                     LOGGER.info("Skipped overwriting " + outputFilename);
                     continue;
                 }
+                LOGGER.info("generateSupportingFiles(): outputFolder: {}  getOutputDir: {} ", config.outputFolder(), config.getOutputDir() );
+
                 String templateFile;
                 if( support instanceof GlobalSupportingFile) {
                     templateFile = config.getCommonTemplateDir() + File.separator +  support.templateFile;
@@ -648,7 +655,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                         File outputFile = new File(outputFilename);
                         OutputStream out = new FileOutputStream(outputFile, false);
                         if (in != null) {
-                            LOGGER.info("writing file " + outputFile);
+                            LOGGER.info("writing file a " + outputFile);
                             IOUtils.copy(in, out);
                             out.close();
                         } else {
@@ -789,12 +796,67 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
     }
 
     private File processTemplateToFile(Map<String, Object> templateData, String templateName, String outputFilename) throws IOException {
+        LOGGER.info("TemplateName: {}  outputFilename: {}", templateName, outputFilename);
+
         String adjustedOutputFilename = outputFilename.replaceAll("//", "/").replace('/', File.separatorChar);
-        if(ignoreProcessor.allowsFile(new File(adjustedOutputFilename))) {
-            String templateFile = getFullTemplateFile(config, templateName);
-            String rendered = templateEngine.getRendered(templateFile, templateData);
-            writeToFile(adjustedOutputFilename, rendered);
-            return new File(adjustedOutputFilename);
+
+        if (ignoreProcessor.allowsFile(new File(adjustedOutputFilename))) {
+
+          String fileSuffix = System.getProperty("fileSuffix");
+          String mustacheFile = System.getProperty("mustacheFile");
+          String skipString = System.getProperty("skipList");
+          String replPath = System.getProperty("replPath");
+
+          if (!isNull(replPath)) {
+            List<String> replPathList = Arrays.asList(replPath.split(","));
+            if (replPathList.size() == 2) {
+                adjustedOutputFilename = adjustedOutputFilename.replace(replPathList.get(0),
+                    replPathList.get(1));
+                LOGGER.info("Path adjusted to {}", adjustedOutputFilename);
+            } else {
+              LOGGER.error(
+                  "replPath argument incorrect.  Split resulted in {} itens", replPathList.size());
+            }
+          }
+
+          int lastDotIndex = adjustedOutputFilename.lastIndexOf('.');
+          if (!isNull(skipString)) {
+            List<String> items = Arrays.asList(skipString.split(","));
+            for (int i = 0; i < items.size(); i++) {
+              if (adjustedOutputFilename.substring(0, lastDotIndex).endsWith(items.get(i))) {
+                LOGGER.info(
+                    "Skipped generation of "
+                        + adjustedOutputFilename
+                        + " due to the skipList parameter");
+                return null;
+              }
+            }
+          }
+
+          if (!isNull(mustacheFile)) {
+            templateName = mustacheFile;
+          }
+
+          if (isNull(fileSuffix)) {
+            fileSuffix = "";
+          } else {
+            String s =
+                adjustedOutputFilename.substring(0, lastDotIndex)
+                    + fileSuffix
+                    + adjustedOutputFilename.substring(lastDotIndex);
+            LOGGER.warn(
+                "Class: {}  Method: {}  Renaming file from {} to {}",
+                this.getClass().getSimpleName(),
+                "processTemplateToFile",
+                adjustedOutputFilename,
+                s);
+            adjustedOutputFilename = s;
+          }
+
+          String templateFile = getFullTemplateFile(config, templateName);
+          String rendered = templateEngine.getRendered(templateFile, templateData);
+          writeToFile(adjustedOutputFilename, rendered);
+          return new File(adjustedOutputFilename);
         }
 
         LOGGER.info("Skipped generation of " + adjustedOutputFilename + " due to rule in .swagger-codegen-ignore");

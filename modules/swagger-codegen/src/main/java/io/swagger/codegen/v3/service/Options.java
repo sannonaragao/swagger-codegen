@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Options {
 
@@ -41,6 +43,8 @@ public class Options {
     private Map<String, String> codegenArguments = new LinkedHashMap<>();
 
     private boolean flattenInlineComposedSchemas = false;
+
+    protected static final Logger LOGGER = LoggerFactory.getLogger(Options.class);
 
     public Options authorizationValue(AuthorizationValue authorizationValue) {
         this.authorizationValue = authorizationValue;

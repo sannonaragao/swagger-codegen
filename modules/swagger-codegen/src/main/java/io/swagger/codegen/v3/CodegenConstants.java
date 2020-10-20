@@ -334,6 +334,7 @@ public class CodegenConstants {
     public static final String MODEL_TESTS_OPTION = "--model-tests";
     public static final String API_TESTS_OPTION = "--api-tests";
     public static final String USE_OAS2_OPTION = "--use-oas2";
+    public static final String FILE_SUFFIX_OPTION = "--file-suffix";
 
     public static final String HANDLEBARS_TEMPLATE_ENGINE = "handlebars";
     public static final String MUSTACHE_TEMPLATE_ENGINE = "mustache";

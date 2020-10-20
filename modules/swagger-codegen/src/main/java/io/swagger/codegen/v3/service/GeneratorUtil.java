@@ -95,6 +95,7 @@ public class GeneratorUtil {
         }
         codegenConfig.setOutputDir(generationRequest.getOptions().getOutputDir());
         codegenConfig.setInputSpec(inputSpec);
+
         if (isNotEmpty(options.getApiPackage())) {
             codegenConfig.additionalProperties().put(CodegenConstants.API_PACKAGE, options.getApiPackage());
         }
@@ -177,7 +178,7 @@ public class GeneratorUtil {
 
     }
     public static ClientOptInput getClientOptInput(GenerationRequest generationRequest) {
-        LOGGER.debug("getClientOptInput - start");
+        LOGGER.info("getClientOptInput - start");
         final Options options = generationRequest.getOptions();
         String inputSpec = null;
         if (generationRequest.getSpec() == null) {
@@ -190,7 +191,6 @@ public class GeneratorUtil {
         String inputSpecURL = generationRequest.getSpecURL();
         String lang = generationRequest.getLang();
         validateSpec(lang, inputSpec, inputSpecURL);
-        LOGGER.debug("getClientOptInput - validated");
         CodegenConfigurator configurator = new CodegenConfigurator();
 
         configurator.setOutputDir(generationRequest.getOptions().getOutputDir());

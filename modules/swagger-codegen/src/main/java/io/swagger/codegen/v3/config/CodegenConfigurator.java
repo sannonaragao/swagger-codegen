@@ -122,6 +122,7 @@ public class CodegenConfigurator implements Serializable {
 
     public CodegenConfigurator setOutputDir(String outputDir) {
         this.outputDir = toAbsolutePathStr(outputDir);
+        LOGGER.warn("CodegenConfigurator.setOutputDir: {}", this.outputDir);
         return this;
     }
 
@@ -130,6 +131,7 @@ public class CodegenConfigurator implements Serializable {
     }
 
     public CodegenConfigurator setModelPackage(String modelPackage) {
+        LOGGER.warn("CodegenConfigurator.setModelPackage: {}", modelPackage);
         this.modelPackage = modelPackage;
         return this;
     }
@@ -321,6 +323,7 @@ public class CodegenConfigurator implements Serializable {
     }
 
     public CodegenConfigurator addAdditionalProperty(String key, Object value) {
+////        LOGGER.info("Key: {}  Value: {} ",key, value);
         this.additionalProperties.put(key, value);
         return this;
     }
@@ -619,6 +622,7 @@ public class CodegenConfigurator implements Serializable {
 
     private void setSystemProperties() {
         for (Map.Entry<String, String> entry : systemProperties.entrySet()) {
+////            LOGGER.info("Key: {}  Value: {} ", entry.getKey(), entry.getValue());
             System.setProperty(entry.getKey(), entry.getValue());
         }
     }

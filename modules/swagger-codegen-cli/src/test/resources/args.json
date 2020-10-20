@@ -3,5 +3,5 @@
   "library":"jersey2",
   "additionalProperties":["serializableModel=true","withXml=true"],
   "spec":"/some/place/locally",
-  "output":"/some/place/locally"
+  "output":"c:/tmp/some/place/locally"
 }

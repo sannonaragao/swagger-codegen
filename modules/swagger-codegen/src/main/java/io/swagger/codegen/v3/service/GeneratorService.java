@@ -3,11 +3,10 @@ package io.swagger.codegen.v3.service;
 import io.swagger.codegen.v3.ClientOptInput;
 import io.swagger.codegen.v3.DefaultGenerator;
 import io.swagger.codegen.v3.service.exception.BadRequestException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GeneratorService {
     protected final Logger LOGGER = LoggerFactory.getLogger(GeneratorService.class);
@@ -32,6 +31,8 @@ public class GeneratorService {
             final ClientOptInput clientOptInput;
             try {
                 clientOptInput = GeneratorUtil.getClientOptInput(generationRequest);
+////                LOGGER.info("linha 35 clientOptInput.getConfig().modelFileFolder() {}", clientOptInput.getConfig().modelFileFolder());
+
             } catch (Exception e) {
                 String msg = "Error processing input options: " + e.getMessage();
                 LOGGER.error(msg, e);
@@ -45,6 +46,7 @@ public class GeneratorService {
 
     public List<File> generate() {
         if (optsV3 != null) {
+////            LOGGER.info("optsV3: {}", optsV3.toString());
             return new DefaultGenerator().opts(optsV3).generate();
         } else if (optsV2 != null) {
             return new io.swagger.codegen.DefaultGenerator().opts(optsV2).generate();

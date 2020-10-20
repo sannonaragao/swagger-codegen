@@ -22,7 +22,6 @@ public abstract class AbstractGenerator {
 
     @SuppressWarnings("static-method")
     public File writeToFile(String filename, String contents) throws IOException {
-        LOGGER.info("writing file " + filename);
         File output = new File(filename);
 
         if (output.getParent() != null && !new File(output.getParent()).exists()) {
