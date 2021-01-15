@@ -1,6 +1,7 @@
 package io.swagger.codegen.v3;
 
 import static java.util.Objects.isNull;
+
 import io.swagger.codegen.v3.ignore.CodegenIgnoreProcessor;
 import io.swagger.codegen.v3.templates.TemplateEngine;
 import io.swagger.codegen.v3.utils.ImplementationVersion;
@@ -13,17 +14,12 @@ import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.media.ComposedSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.tags.Tag;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -38,6 +34,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -46,6 +43,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 //import io.swagger.codegen.languages.AbstractJavaCodegen;
 
@@ -58,6 +60,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
     protected TemplateEngine templateEngine;
     private Boolean generateApis = null;
     private Boolean generateModels = null;
+    private Boolean generateModelsOneFile = null;
     private Boolean generateSupportingFiles = null;
     private Boolean generateApiTests = null;
     private Boolean generateApiDocumentation = null;
@@ -152,6 +155,9 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
         } else {
             generateModels = System.getProperty(CodegenConstants.MODELS) != null ? Boolean.TRUE : getGeneratorPropertyDefaultSwitch(CodegenConstants.MODELS, null);
         }
+
+        generateModelsOneFile = System.getProperty("onefile") != null ? Boolean.TRUE : Boolean.FALSE;
+
         String supportingFilesProperty = System.getProperty(CodegenConstants.SUPPORTING_FILES);
         if (((supportingFilesProperty != null) && supportingFilesProperty.equalsIgnoreCase("false"))) {
             generateSupportingFiles = false;
@@ -205,7 +211,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
 
         config.additionalProperties().put(CodegenConstants.GENERATE_API_DOCS, generateApiDocumentation);
         config.additionalProperties().put(CodegenConstants.GENERATE_MODEL_DOCS, generateModelDocumentation);
-        
+
         // Additional properties could be set already (f.e. using Maven plugin)
         if (useOas2Option != null || !config.additionalProperties().containsKey(CodegenConstants.USE_OAS2)) {
             config.additionalProperties().put(CodegenConstants.USE_OAS2, useOas2);
@@ -252,7 +258,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
             LOGGER.error("Missing required field info version. Default appVersion set to 1.0.0");
             config.additionalProperties().put("appVersion", "1.0.0");
         }
-        
+
         if (StringUtils.isEmpty(info.getDescription())) {
             // set a default description if none is provided
             config.additionalProperties().put("appDescription",
@@ -330,9 +336,175 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
         }
     }
 
+    private void generateModelsOneFile(List<File> files, List<Object> allModels) {
+
+        if (!generateModelsOneFile) {
+            return;
+        }
+
+        final Map<String, Schema> schemas = this.openAPI.getComponents().getSchemas();
+        if (schemas == null) {
+            return;
+        }
+
+        String modelNames = System.getProperty("models");
+
+        Set<String> modelsToGenerate = null;
+        if (modelNames != null && !modelNames.isEmpty()) {
+            modelsToGenerate = new HashSet<>(Arrays.asList(modelNames.split(",")));
+        }
+
+        Set<String> modelKeys = schemas.keySet();
+        if (modelsToGenerate != null && !modelsToGenerate.isEmpty()) {
+            Set<String> updatedKeys = new HashSet<>();
+            for (String m : modelKeys) {
+                if (modelsToGenerate.contains(m)) {
+                    updatedKeys.add(m);
+                }
+            }
+            modelKeys = updatedKeys;
+        }
+
+//        // store all processed models
+        Map<String, Object> allProcessedModels = new TreeMap<>(new Comparator<String>() {
+            @Override
+            public int compare(String o1, String o2) {
+                return ObjectUtils.compare(config.toModelName(o1), config.toModelName(o2));
+            }
+        });
+
+        // process models only
+        Map<String, Schema> schemaMap = new HashMap<>();
+
+        final Map<String, CodegenModel> allModelsSannon = new HashMap<>();  //test sannon
+
+        for (String name : modelKeys) {
+            try {
+                LOGGER.warn("modelKey {}", name);
+                //don't generate models that have an import mapping
+
+                if (!config.getIgnoreImportMapping() && config.importMapping().containsKey(name)) {
+                    continue;
+                }
+                Schema schema = schemas.get(name);
+                schemaMap.put(name, schema);
+
+                Map<String, Object> models = processModels(config, schemaMap, schemas);
+                models.put("classname", config.toModelName(name));
+                models.putAll(config.additionalProperties());
+
+                allProcessedModels.put(name, models);
+
+                final List<Object> modelList = (List<Object>) models.get("models");
+
+                if (modelList == null || modelList.isEmpty()) {
+                    continue;
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Could not process model '" + name + "'"
+                    + ".Please make sure that your schema is correct!", e);
+            }
+        }
+        final ISchemaHandler schemaHandler = config.getSchemaHandler();
+        schemaHandler.readProcessedModels(allProcessedModels);
+
+        final List<CodegenModel> codegenModelList = new ArrayList<>();
+
+        Iterator<String> iterator = allProcessedModels.keySet().iterator();
+        boolean writenfile = false;
+//        while (iterator.hasNext() && !writenfile) {
+        while (iterator.hasNext()) {
+            String modelName = iterator.next();
+            LOGGER.warn("modelName {}", modelName);
+            try {
+                //don't generate models that have an import mapping
+                if (!config.getIgnoreImportMapping() && config.importMapping()
+                    .containsKey(modelName)) {
+                    continue;
+                }
+
+                Map<String, Object> models = (Map<String, Object>) allProcessedModels.get(modelName);
+                Map<String, Object> modelTemplate = (Map<String, Object>) ((List<Object>) models
+                    .get("models")).get(0);
+                if (config.checkAliasModel()) {
+                    // Special handling of aliases only applies to Java
+                    if (modelTemplate != null && modelTemplate.containsKey("model")) {
+                        CodegenModel codegenModel = (CodegenModel) modelTemplate.get("model");
+                        Map<String, Object> vendorExtensions = codegenModel.getVendorExtensions();
+                        boolean isAlias = false;
+                        if (vendorExtensions.get(CodegenConstants.IS_ALIAS_EXT_NAME) != null) {
+                            isAlias = Boolean.parseBoolean(
+                                vendorExtensions.get(CodegenConstants.IS_ALIAS_EXT_NAME)
+                                    .toString());
+                        }
+                        if (isAlias) {
+                            continue;  // Don't create user-defined classes for aliases
+                        }
+                    }
+                }
+
+
+                allModels.add(modelTemplate);
+                for (String templateName : config.modelTemplateFiles().keySet()) {
+                    String suffix = config.modelTemplateFiles().get(templateName);
+                    String filename =
+                        config.modelFileFolder() + File.separator + config.toModelFilename("")
+                            + suffix; // <-
+                    if (!config.shouldOverwrite(filename)) {
+                        continue;
+                    }
+
+                    /*--------------------------*/
+                    final List<Map<String, Object>> mapModels = (List<Map<String, Object>>) models.get("models");
+                    for (Map<String, Object> mo : mapModels) {
+                        final CodegenModel codegenModel = (CodegenModel) mo.get("model");
+                        boolean exists = false;
+
+                        for (CodegenModel codemodel : codegenModelList) {
+                            if (codemodel.getName().equals(codegenModel.getName())) {
+                                exists = true;
+                            }
+                        }
+                        if (!exists){
+                            codegenModelList.add(codegenModel);
+                        }
+                    }
+
+                    for (CodegenModel codemodel : codegenModelList) {
+                        boolean exists = false;
+                        for (Map<String, Object> mo : mapModels) {
+                            final CodegenModel codegenModel = (CodegenModel) mo.get("model");
+
+                            if (codemodel.getName().equals(codegenModel.getName())) {
+                                exists = true;
+                            }
+                        }
+                        if (!exists && ignoreProcessor.allowsFile(new File(codemodel.getName()+".java")) ){
+                            Map<String, Object> modelToAdd = new HashMap<>();
+                            modelToAdd.put("model", codemodel);
+                            mapModels.add(modelToAdd);
+                            LOGGER.warn("DONT EXISTS  codemodel {} ", codemodel.getName());
+                        }
+                    }
+                    /*---------------------------------*/
+                    File written = processTemplateToFile(models, templateName, filename);
+
+                    if (written != null) {
+                        files.add(written);
+                        writenfile = true;
+                    }
+                    break;
+                }
+
+            } catch (Exception e) {
+                throw new RuntimeException("Could not generate model '" + modelName + "'", e);
+            }
+        }
+    }
+
     private void generateModels(List<File> files, List<Object> allModels) {
 
-        if (!generateModels) {
+        if (!generateModels || generateModelsOneFile) {
             return;
         }
 
@@ -441,6 +613,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                         LOGGER.info("Skipped overwriting " + filename);
                         continue;
                     }
+//                    LOGGER.warn("processTemplateToFile Line 582");
                     File written = processTemplateToFile(models, templateName, filename);
                     if(written != null) {
                         files.add(written);
@@ -542,6 +715,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                         continue;
                     }
 
+
                     File written = processTemplateToFile(operation, templateName, filename);
                     if(written != null) {
                         files.add(written);
@@ -638,6 +812,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
 
                 if(ignoreProcessor.allowsFile(new File(outputFilename))) {
                     if (templateFile.endsWith("mustache")) {
+//                        LOGGER.warn("Starting getRendered line 779 ");
                         String rendered = templateEngine.getRendered(templateFile, bundle);
                         writeToFile(outputFilename, rendered);
                         files.add(new File(outputFilename));
@@ -664,7 +839,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                         files.add(outputFile);
                     }
                 } else {
-                    LOGGER.info("Skipped generation of " + outputFilename + " due to rule in .swagger-codegen-ignore");
+//                    LOGGER.info("generateSupportingFiles Skipped generation of " + outputFilename + " due to rule in .swagger-codegen-ignore");
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Could not generate supporting file '" + support + "'", e);
@@ -788,6 +963,12 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
         List<Object> allOperations = new ArrayList<>();
         generateApis(files, allOperations, allModels);
 
+        // models
+        List<Object> allModelsSingleFiles = new ArrayList<>();
+        generateModelsOneFile(files, allModelsSingleFiles);
+//        System.out.println("PRINTING TEST .....");
+//        allModelsSingleFiles.forEach(o -> System.out.println(o));
+//        System.out.println("PRINTING TEST END .....");
         // supporting files
         Map<String, Object> bundle = buildSupportFileBundle(allOperations, allModels);
         generateSupportingFiles(files, bundle);
@@ -796,7 +977,28 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
     }
 
     private File processTemplateToFile(Map<String, Object> templateData, String templateName, String outputFilename) throws IOException {
-        LOGGER.info("TemplateName: {}  outputFilename: {}", templateName, outputFilename);
+//        LOGGER.info("TemplateName: {}  outputFilename: {}", templateName, outputFilename);
+//        LOGGER.warn("Sannon Test templateName: {} outputFilename: {} ", templateName, outputFilename);
+//        templateData.forEach((s, o) -> {
+//            LOGGER.warn("Sannon Test String: {} Object: {} ", s, o);
+//        });
+//        templateData.put("xxxxx", "String teste");
+        final Object dataModels = templateData.get("models");
+
+        if (dataModels instanceof List) {
+            final List<?> dataModelsList = (List<?>) dataModels;
+            for (final Object entry : dataModelsList) {
+                if (entry instanceof Map) {
+                    final Map<?, ?> entryMap = (Map<?, ?>) entry;
+                    final Object model = entryMap.get("model");
+//                    LOGGER.warn("Sannon Test Item model: {} ", model);
+                    if (model instanceof CodegenModel) {
+                        CodegenModel codegenModel = (CodegenModel) model;
+//                        LOGGER.warn("processTemplateToFile codegenModel 967 {}", codegenModel);
+                    }
+                }
+            }
+        }
 
         String adjustedOutputFilename = outputFilename.replaceAll("//", "/").replace('/', File.separatorChar);
 
@@ -806,6 +1008,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
           String mustacheFile = System.getProperty("mustacheFile");
           String skipString = System.getProperty("skipList");
           String replPath = System.getProperty("replPath");
+//          LOGGER.warn("Sannon Test  fileSuffix:{} mustacheFile:{} skipString:{} replPath:{} ", fileSuffix, mustacheFile, skipString, replPath);
 
           if (!isNull(replPath)) {
             List<String> replPathList = Arrays.asList(replPath.split(","));
@@ -818,10 +1021,12 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                   "replPath argument incorrect.  Split resulted in {} itens", replPathList.size());
             }
           }
+//        LOGGER.warn("-> adjustedOutputFilename:{} skipString{}", adjustedOutputFilename, skipString);
 
           int lastDotIndex = adjustedOutputFilename.lastIndexOf('.');
           if (!isNull(skipString)) {
             List<String> items = Arrays.asList(skipString.split(","));
+//              LOGGER.warn("-> items:{} ", items);
             for (int i = 0; i < items.size(); i++) {
               if (adjustedOutputFilename.substring(0, lastDotIndex).endsWith(items.get(i))) {
                 LOGGER.info(
@@ -832,7 +1037,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
               }
             }
           }
-
+//            LOGGER.warn("-> mustacheFile:{} ", mustacheFile);
           if (!isNull(mustacheFile)) {
             templateName = mustacheFile;
           }
@@ -854,12 +1059,13 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
           }
 
           String templateFile = getFullTemplateFile(config, templateName);
+//          LOGGER.warn("Starting getRendered line 1005 ");
           String rendered = templateEngine.getRendered(templateFile, templateData);
           writeToFile(adjustedOutputFilename, rendered);
           return new File(adjustedOutputFilename);
         }
 
-        LOGGER.info("Skipped generation of " + adjustedOutputFilename + " due to rule in .swagger-codegen-ignore");
+//        LOGGER.info("processTemplateToFile Skipped generation of " + adjustedOutputFilename + " due to rule in .swagger-codegen-ignore");
         return null;
     }
 
