@@ -122,7 +122,7 @@ public class CodegenConfigurator implements Serializable {
 
     public CodegenConfigurator setOutputDir(String outputDir) {
         this.outputDir = toAbsolutePathStr(outputDir);
-        LOGGER.warn("CodegenConfigurator.setOutputDir: {}", this.outputDir);
+//        LOGGER.warn("CodegenConfigurator.setOutputDir: {}", this.outputDir);
         return this;
     }
 
@@ -131,7 +131,7 @@ public class CodegenConfigurator implements Serializable {
     }
 
     public CodegenConfigurator setModelPackage(String modelPackage) {
-        LOGGER.warn("CodegenConfigurator.setModelPackage: {}", modelPackage);
+//        LOGGER.warn("CodegenConfigurator.setModelPackage: {}", modelPackage);
         this.modelPackage = modelPackage;
         return this;
     }

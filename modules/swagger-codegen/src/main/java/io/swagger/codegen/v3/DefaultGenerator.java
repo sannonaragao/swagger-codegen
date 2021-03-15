@@ -381,8 +381,11 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
         for (String name : modelKeys) {
             try {
                 LOGGER.warn("modelKey {}", name);
+                if( name.contains("sList")){
+                    LOGGER.warn("Gambiarra pulando. Ignorar tudo que tem sList {}", name);
+                    continue;
+                }
                 //don't generate models that have an import mapping
-
                 if (!config.getIgnoreImportMapping() && config.importMapping().containsKey(name)) {
                     continue;
                 }
@@ -646,6 +649,10 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
             hasModel = false;
         }
 
+//        if (!isNull(this.openAPI.getExtensions())){
+//            this.openAPI.getExtensions().forEach((s, o) -> LOGGER.warn(" openAPI.getExtensions(): {} / {}", s, o));
+//        }
+
         Map<String, List<CodegenOperation>> paths = processPaths(this.openAPI.getPaths());
         Set<String> apisToGenerate = null;
         String apiNames = System.getProperty("apis");
@@ -673,7 +680,7 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                 Map<String, Object> operation = processOperations(config, tag, ops, allModels);
 
                 processSecurityProperties(operation);
-
+//SANNON IMPORTANT POINT
                 operation.put("basePath", basePath);
                 operation.put("basePathWithoutHost", basePathWithoutHost);
                 operation.put("contextPath", contextPath);
@@ -688,7 +695,8 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
                 if(!config.vendorExtensions().isEmpty()) {
                     operation.put("vendorExtensions", config.vendorExtensions());
                 }
-
+//                config.vendorExtensions()
+//                    .forEach((s, o) -> LOGGER.warn("config.vendorExtensions(): {} / {}", s, o));
                 // Pass sortParamsByRequiredFlag through to the Mustache template...
                 boolean sortParamsByRequiredFlag = true;
                 if (this.config.additionalProperties().containsKey(CodegenConstants.SORT_PARAMS_BY_REQUIRED_FLAG)) {
@@ -1095,7 +1103,9 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
     public Map<String, List<CodegenOperation>> processPaths(Paths paths) {
         Map<String, List<CodegenOperation>> ops = new TreeMap<>();
         for (String resourcePath : paths.keySet()) {
+//            LOGGER.warn("resourcePath {}", resourcePath);
             PathItem path = paths.get(resourcePath);
+
             processOperation(resourcePath, "get", path.getGet(), ops, path);
             processOperation(resourcePath, "head", path.getHead(), ops, path);
             processOperation(resourcePath, "put", path.getPut(), ops, path);
@@ -1103,6 +1113,21 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
             processOperation(resourcePath, "delete", path.getDelete(), ops, path);
             processOperation(resourcePath, "patch", path.getPatch(), ops, path);
             processOperation(resourcePath, "options", path.getOptions(), ops, path);
+//
+//            if (!isNull(path.getExtensions())) {
+//                path.getExtensions().forEach((s, o) -> {
+//                    if (s.equals("x-dataType")) {
+//
+//                        LOGGER.warn(" path.getExtensions(): {} / {} / {} ", s, o, ops.size());
+//                        ops.forEach((s1, codegenOperations) -> {
+//                            LOGGER.warn(" s1   ", s1.toString());
+//                            codegenOperations.forEach(codegenOperation -> {
+//                                LOGGER.warn(codegenOperation.getOperationId());
+//                            });
+//                        });
+//                    }
+//                });
+//            }
         }
         return ops;
     }
@@ -1218,6 +1243,10 @@ public class DefaultGenerator extends AbstractGenerator implements Generator {
         Set<String> opIds = new HashSet<>();
         int counter = 0;
         for (CodegenOperation op : ops) {
+//            LOGGER.warn(" op.operationId: {}", op.operationId);
+//          op.getVendorExtensions()
+//              .forEach((s, o) -> LOGGER.warn(" op.getVendorExtensions: {} / {}", s, o));
+          op.getVendorExtensions().put("x-" + op.operationId, true);
             String opId = op.nickname;
             if (opIds.contains(opId)) {
                 counter++;

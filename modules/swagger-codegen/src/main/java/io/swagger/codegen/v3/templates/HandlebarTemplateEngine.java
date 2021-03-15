@@ -45,6 +45,10 @@ public class HandlebarTemplateEngine implements TemplateEngine {
 //          LOGGER.warn("codegenModel getRendered 43 {}", codegenModel);
 //          LOGGER.warn("codegenModel getModelJson {}", codegenModel.getModelJson());
             codegenModel.getOptionalVars().forEach(s -> {
+//              codegenModel.getVendorExtensions().entrySet().forEach(stringObjectEntry -> {
+//                LOGGER.warn("stringObjectEntry.getKey() -> {} stringObjectEntry.getValue()-> {}",
+//                    stringObjectEntry.getKey(), stringObjectEntry.getValue());
+//              });
               codegenModel.getVendorExtensions().entrySet()
                   .stream()
                   .filter(map -> map.getKey().startsWith("x-prop-") && map.getKey()

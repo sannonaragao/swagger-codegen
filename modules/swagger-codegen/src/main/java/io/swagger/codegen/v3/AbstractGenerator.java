@@ -85,6 +85,7 @@ public abstract class AbstractGenerator {
         final String library = config.getLibrary();
         if (StringUtils.isNotEmpty(library)) {
             //look for the file in the library subfolder of the supplied template
+            LOGGER.error("config.customTemplateDir() {}", config.customTemplateDir());
             if (StringUtils.isNotBlank(config.customTemplateDir())) {
                 final String libTemplateFile = buildLibraryFilePath(config.customTemplateDir(), library, templateFile);
                 if (new File(libTemplateFile).exists()) {
